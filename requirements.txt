@@ -1,6 +1,9 @@
 httpx
 uvicorn
 starlette
+aioconsole
+# Note: a2a package is an internal package not available on PyPI
+# Install separately from internal repository if needed
 pytest
 pytest-asyncio
 pytest-mock

@@ -1,31 +1,30 @@
 """Unit tests for the A2A agent client module."""
-import pytest # pyright: ignore[reportMissingImports]
+import pytest  # pyright: ignore[reportMissingImports]
 from unittest.mock import patch, AsyncMock, MagicMock
-from src.client import process_response, main # pyright: ignore[reportMissingImports]
+from src.client import extract_response_texts, process_response, main  # pyright: ignore[reportMissingImports]
 
 
-def test_process_response_with_error():
-    """Test that process_response handles error responses correctly."""
+def test_extract_response_texts_with_error():
+    """Test that extract_response_texts handles error responses correctly."""
     result = {
         "error": {"code": -32600, "message": "Invalid Request"}
     }
-    
-    with patch('builtins.print') as mock_print:
-        process_response(result)
-        mock_print.assert_called_once_with("Error:", {"code": -32600, "message": "Invalid Request"})
+
+    texts = extract_response_texts(result)
+    assert len(texts) == 1
+    assert "Error:" in texts[0]
 
 
-def test_process_response_with_no_result():
-    """Test that process_response handles responses with no result."""
+def test_extract_response_texts_with_no_result():
+    """Test that extract_response_texts handles responses with no result."""
     result = {"jsonrpc": "2.0", "id": "1"}
-    
-    with patch('builtins.print') as mock_print:
-        process_response(result)
-        mock_print.assert_not_called()
+
+    texts = extract_response_texts(result)
+    assert texts == []
 
 
-def test_process_response_with_message():
-    """Test that process_response correctly prints agent responses."""
+def test_extract_response_texts_with_message():
+    """Test that extract_response_texts correctly extracts agent responses."""
     result = {
         "jsonrpc": "2.0",
         "id": "1",
@@ -35,14 +34,13 @@ def test_process_response_with_message():
             }
         }
     }
-    
-    with patch('builtins.print') as mock_print:
-        process_response(result)
-        mock_print.assert_called_with("Agent says: Hello! You said: Hi there")
+
+    texts = extract_response_texts(result)
+    assert texts == ["Hello! You said: Hi there"]
 
 
-def test_process_response_with_task_message():
-    """Test that process_response handles task status messages."""
+def test_extract_response_texts_with_task_message():
+    """Test that extract_response_texts handles task status messages."""
     result = {
         "jsonrpc": "2.0",
         "id": "1",
@@ -56,14 +54,13 @@ def test_process_response_with_task_message():
             }
         }
     }
-    
-    with patch('builtins.print') as mock_print:
-        process_response(result)
-        mock_print.assert_called_with("Agent says: Task completed")
+
+    texts = extract_response_texts(result)
+    assert texts == ["Task completed"]
 
 
-def test_process_response_with_multiple_parts():
-    """Test that process_response handles messages with multiple parts."""
+def test_extract_response_texts_with_multiple_parts():
+    """Test that extract_response_texts handles messages with multiple parts."""
     result = {
         "jsonrpc": "2.0",
         "id": "1",
@@ -76,13 +73,40 @@ def test_process_response_with_multiple_parts():
             }
         }
     }
-    
+
+    texts = extract_response_texts(result)
+    assert texts == ["First part", "Second part"]
+
+
+def test_process_response_with_error():
+    """Test that process_response handles error responses correctly."""
+    result = {
+        "error": {"code": -32600, "message": "Invalid Request"}
+    }
+
     with patch('builtins.print') as mock_print:
         process_response(result)
-        assert mock_print.call_count == 2
-        calls = [call[0][0] for call in mock_print.call_args_list]
-        assert "Agent says: First part" in calls
-        assert "Agent says: Second part" in calls
+        mock_print.assert_called_once()
+        assert "Error:" in mock_print.call_args[0][0]
+
+
+def test_process_response_with_message():
+    """Test that process_response correctly prints agent responses."""
+    result = {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "result": {
+            "message": {
+                "parts": [{"text": "Hello! You said: Hi there"}]
+            }
+        }
+    }
+
+    with patch('builtins.print') as mock_print:
+        process_response(result)
+        mock_print.assert_called_with("Agent says: Hello! You said: Hi there")
+
+
 @pytest.mark.asyncio
 async def test_main_function():
     """Test the main client function."""
@@ -101,7 +125,8 @@ async def test_main_function():
     mock_agent_card_response = MagicMock()
     mock_agent_card_response.json.return_value = {"name": "Hello Agent"}
 
-    with patch('httpx.AsyncClient') as mock_client_class:
+    with patch('httpx.AsyncClient') as mock_client_class, \
+         patch('src.client.aioconsole.ainput', return_value="Hello! Can you help me?") as mock_ainput:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -110,11 +135,12 @@ async def test_main_function():
         # Setup responses
         mock_client.get.return_value = mock_agent_card_response
         mock_client.post.return_value = mock_response
-        
+
         with patch('builtins.print') as mock_print:
             await main()
-            
+
             mock_client.get.assert_called_once()
             mock_client.post.assert_called_once()
-            
+            mock_ainput.assert_called_once()
+
             assert mock_print.call_count >= 1

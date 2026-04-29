@@ -1,0 +1,7 @@
+httpx
+uvicorn
+starlette
+pytest
+pytest-asyncio
+pytest-mock
+pytest-cov

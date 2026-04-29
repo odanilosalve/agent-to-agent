@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from src.server import HelloAgentExecutor, create_agent_card, create_app  # type: ignore
 from src import config
 from a2a.server.agent_execution import RequestContext  # pyright: ignore[reportMissingImports]
-from a2a.types import Message, Part, Role, TaskStatus, TaskState, TaskStatusUpdateEvent  # pyright: ignore[reportMissingImports]
+from a2a.types import Message, Part, Role, Task, TaskStatus, TaskState, TaskStatusUpdateEvent  # pyright: ignore[reportMissingImports]
 
 
 @pytest.mark.asyncio
@@ -26,13 +26,14 @@ async def test_hello_agent_executor_execute():
     await executor.execute(context, event_queue)
 
     assert event_queue.enqueue_event.called
-    assert event_queue.enqueue_event.call_count >= 2
+    assert event_queue.enqueue_event.call_count == 2
 
-    # Verify the events are TaskStatusUpdateEvent with correct states
+    # Verify the events: Task first, then TaskStatusUpdateEvent
     calls = event_queue.enqueue_event.call_args_list
-    assert all(isinstance(call[0][0], TaskStatusUpdateEvent) for call in calls)
+    assert isinstance(calls[0][0][0], Task)
+    assert isinstance(calls[1][0][0], TaskStatusUpdateEvent)
     assert calls[0][0][0].status.state == TaskState.TASK_STATE_WORKING
-    assert calls[-1][0][0].status.state == TaskState.TASK_STATE_COMPLETED
+    assert calls[1][0][0].status.state == TaskState.TASK_STATE_COMPLETED
 
 
 @pytest.mark.asyncio
